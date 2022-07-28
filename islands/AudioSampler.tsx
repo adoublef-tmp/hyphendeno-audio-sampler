@@ -6,22 +6,36 @@ import { tw } from "@twind";
 import { IS_BROWSER } from "https://deno.land/x/fresh@1.0.1/runtime.ts";
 
 export default function AudioSampler({ dbName, version }: AudioSamplerProps) {
-    const AudioSamplerContext = setupAudioSamplerContext({ dbName, version });
+    const AudioSamplerContext = audioSamplerContext({ dbName, version });
+
+
 
     return (
         <AudioSamplerContext>
             <div>
                 <SampleLibrary />
-                <SamplePad />
-                <SamplePad />
+                <DrumPad />
             </div>
         </AudioSamplerContext>
     );
 }
 
+function DrumPad() {
+    const { state: { library } } = useAudioSamplerContext();
+    return (
+        <div>
+            {library.map(({ name }) => <SamplePad key={name} name={name} />)};
+        </div>
+    );
+}
+
+type LibraryEntry = {
+    name: string;
+};
+
 function useSampleLibrary() {
-    const { dispatch, state: { dbName, version } } = useAudioSamplerContext();
-    const [library, setLibrary] = useState<string[]>([]);
+    const { dispatch, state: { dbName, version, library } } = useAudioSamplerContext();
+    // const [library, setLibrary] = useState<string[]>([]);
 
     useEffect(() => {
         (async () => {
@@ -31,7 +45,8 @@ function useSampleLibrary() {
                 const tx = db.transaction("sample");
 
                 for await (const cursor of tx.store) {
-                    setLibrary(library => [...library, cursor.value.name]);
+                    // libray should have file name and file svg path?
+                    dispatch({ type: "uploadsample", payload: { name: cursor.value.name } });
                 }
 
                 await tx.done;
@@ -45,12 +60,10 @@ function useSampleLibrary() {
 function SampleLibrary() {
     const { library } = useSampleLibrary();
 
-    // 
-
     return (
         <div>
             <h1>Sample Library</h1>
-            {library.map(name => <SamplePreview key={name} name={name} />)}
+            {library.map(({ name }) => <SamplePreview key={name} name={name} />)}
         </div>
     );
 }
@@ -66,13 +79,13 @@ function SamplePreview({ name }: { name: string; }) {
     );
 }
 
-function useSamplePad() {
+
+function useSamplePad(props?: { name?: string; }) {
     const { dispatch, state: { dbName, version, audioCtx } } = useAudioSamplerContext();
 
-    const [name, setName] = useState("todo");
+    const [name, setName] = useState(props?.name ?? "");
 
     const playSample = async () => {
-        /** GET FROM DATABASE */
         const db = await dbConnection({ dbName, version });
 
         const tx = db.transaction("sample", "readwrite");
@@ -80,7 +93,6 @@ function useSamplePad() {
 
         const [sample] = await Promise.all([store.get(name), tx.done]);
 
-        /** PLAY AUDIO SAMPLE */
         if (audioCtx && sample) {
             const { file } = sample;
 
@@ -116,17 +128,17 @@ function useSamplePad() {
                 const [name] = await Promise.all([store.put(sample), tx.done]);
 
                 setName(name);
+
+                dispatch({ type: "uploadsample", payload: { name } });
             }
         }
-
-        // dispatch({ type: "uploadsample", payload: file });
     }
 
     return { playSample, uploadSample, sampleName: name };
 }
 
-function SamplePad() {
-    const { playSample, uploadSample, sampleName } = useSamplePad();
+function SamplePad(props?: { name: string; }) {
+    const { playSample, uploadSample, sampleName } = useSamplePad(props);
 
     return (
         <button
@@ -180,13 +192,15 @@ type AudioSamplerProps = { dbName: string, version: number; };
 
 type AudioSamplerAction =
     | { type: "test"; payload: AudioSamplerState; }
-    | { type: "audiocontext", payload: AudioContext; };
+    | { type: "audiocontext", payload: AudioContext; }
+    | { type: "uploadsample", payload: LibraryEntry; };
 
 type AudioSamplerDispatch = (action: AudioSamplerAction) => void;
 
 type AudioSamplerState = {
     dbName: string;
     version: number;
+    library: LibraryEntry[];
     audioCtx?: AudioContext;
 };
 
@@ -203,7 +217,7 @@ function useAudioSamplerContext() {
     return { dispatch, state };
 }
 
-function setupAudioSamplerContext({ dbName, version }: { dbName: string, version: number; }) {
+function audioSamplerContext({ dbName, version }: { dbName: string, version: number; }) {
     /** 
      * FIXME - when `useReducer` is inside the the HOF I get the following error: 
      * main.js:1 Uncaught (in promise) DOMException: 
@@ -216,13 +230,19 @@ function setupAudioSamplerContext({ dbName, version }: { dbName: string, version
             switch (action.type) {
                 case "audiocontext":
                     return { ...state, audioCtx: action.payload };
+                case "uploadsample": {
+                    const e: LibraryEntry = { name: action.payload.name, };
+                    return {
+                        ...state, library: [...state.library, e]
+                    };
+                }
                 case "test":
                     console.log("this is a test");
                     return state;
                 default:
                     return state;
             }
-        }, { dbName, version });
+        }, { dbName, version, library: [] });
 
         useEffect(() => {
             IS_BROWSER && // alert("AudioSampler is running in the browser");
