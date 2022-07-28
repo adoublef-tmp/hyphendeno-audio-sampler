@@ -1,9 +1,9 @@
 /** @jsx h */
-import { createContext, h } from "preact";
+import { createContext, h, Fragment } from "preact";
 import { useContext, useEffect, useReducer, useState } from "preact/hooks";
-import { openDB, DBSchema } from "idb/with-async-ittr";
 import { tw } from "@twind";
-import { IS_BROWSER } from "https://deno.land/x/fresh@1.0.1/runtime.ts";
+import { IS_BROWSER } from "$fresh/runtime.ts";
+import { openDB, DBSchema } from "idb/with-async-ittr";
 
 export default function AudioSampler({ dbName, version }: AudioSamplerProps) {
     const AudioSamplerContext = audioSamplerContext({ dbName, version });
@@ -23,9 +23,9 @@ export default function AudioSampler({ dbName, version }: AudioSamplerProps) {
 function DrumPad() {
     const { state: { library } } = useAudioSamplerContext();
     return (
-        <div>
-            {library.map(({ name }) => <SamplePad key={name} name={name} />)};
-        </div>
+        <Fragment>
+            {[0, 0, 0, 0].map((_, i) => <SamplePad key={i} />)};
+        </Fragment>
     );
 }
 
@@ -63,7 +63,7 @@ function SampleLibrary() {
     return (
         <div>
             <h1>Sample Library</h1>
-            {library.map(({ name }) => <SamplePreview key={name} name={name} />)}
+            {[...library].map(([name,]) => <SamplePreview key={name} name={name} />)}
         </div>
     );
 }
@@ -81,9 +81,9 @@ function SamplePreview({ name }: { name: string; }) {
 
 
 function useSamplePad(props?: { name?: string; }) {
-    const { dispatch, state: { dbName, version, audioCtx } } = useAudioSamplerContext();
+    const { dispatch, state: { dbName, version, audioCtx, library } } = useAudioSamplerContext();
 
-    const [name, setName] = useState(props?.name ?? "");
+    const [name, setName] = useState(props?.name ?? "audio");
 
     const playSample = async () => {
         const db = await dbConnection({ dbName, version });
@@ -132,12 +132,14 @@ function useSamplePad(props?: { name?: string; }) {
                 dispatch({ type: "uploadsample", payload: { name } });
             }
         }
+
+        console.log("huh,", library);
     }
 
     return { playSample, uploadSample, sampleName: name };
 }
 
-function SamplePad(props?: { name: string; }) {
+function SamplePad(props?: { name?: string; }) {
     const { playSample, uploadSample, sampleName } = useSamplePad(props);
 
     return (
@@ -200,7 +202,7 @@ type AudioSamplerDispatch = (action: AudioSamplerAction) => void;
 type AudioSamplerState = {
     dbName: string;
     version: number;
-    library: LibraryEntry[];
+    library: Map<string, LibraryEntry>;
     audioCtx?: AudioContext;
 };
 
@@ -232,9 +234,7 @@ function audioSamplerContext({ dbName, version }: { dbName: string, version: num
                     return { ...state, audioCtx: action.payload };
                 case "uploadsample": {
                     const e: LibraryEntry = { name: action.payload.name, };
-                    return {
-                        ...state, library: [...state.library, e]
-                    };
+                    return { ...state, library: state.library.set(e.name, e) };
                 }
                 case "test":
                     console.log("this is a test");
@@ -242,7 +242,7 @@ function audioSamplerContext({ dbName, version }: { dbName: string, version: num
                 default:
                     return state;
             }
-        }, { dbName, version, library: [] });
+        }, { dbName, version, library: new Map() });
 
         useEffect(() => {
             IS_BROWSER && // alert("AudioSampler is running in the browser");
