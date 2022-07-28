@@ -13,6 +13,7 @@ export default function AudioSampler({ dbName, version }: AudioSamplerProps) {
             <div>
                 <SampleLibrary />
                 <SamplePad />
+                <SamplePad />
             </div>
         </AudioSamplerContext>
     );
@@ -23,17 +24,19 @@ function useSampleLibrary() {
     const [library, setLibrary] = useState<string[]>([]);
 
     useEffect(() => {
-        if (IS_BROWSER) {
-            (async () => {
+        (async () => {
+            if (IS_BROWSER) {
                 const db = await dbConnection({ dbName, version });
 
                 const tx = db.transaction("sample");
 
                 for await (const cursor of tx.store) {
-                    console.log(cursor.key, cursor.value);
+                    setLibrary(library => [...library, cursor.value.name]);
                 }
-            })();
-        }
+
+                await tx.done;
+            }
+        })();
     }, [IS_BROWSER]);
 
     return { library };
@@ -42,17 +45,24 @@ function useSampleLibrary() {
 function SampleLibrary() {
     const { library } = useSampleLibrary();
 
+    // 
+
     return (
         <div>
             <h1>Sample Library</h1>
-            <SamplePreview />
+            {library.map(name => <SamplePreview key={name} name={name} />)}
         </div>
     );
 }
 
-function SamplePreview() {
+function SamplePreview({ name }: { name: string; }) {
+    function selectSample(e: DragEvent) {
+        console.log(`Selected sample: ${name}`);
+        e.dataTransfer?.setData("text/plain", name);
+    }
+
     return (
-        <div class={tw`border(2 red solid) w-20`}>This is a sample preview</div>
+        <div onDragStart={selectSample} draggable class={tw`border(2 red solid) w-20`}>{name}</div>
     );
 }
 
@@ -85,27 +95,28 @@ function useSamplePad() {
     async function uploadSample(e: DragEvent) {
         e.preventDefault();
 
-        // only one file at a time
-        const file = e.dataTransfer?.files.item(0);
-
-        if (audioCtx && file) {
-            /** ADD TO DATABASE - `put` replace (&&) `add` rejects */
-            const db = await dbConnection({ dbName, version });
-
-            const tx = db.transaction("sample", "readwrite");
-            const store = tx.objectStore("sample");
-
-            const sample = { name: file.name.replace(/\.[^/.]+$/, ""), size: file.size, file: file };
-
-            const [name, , buf] = await Promise.all([store.put(sample), tx.done, file.arrayBuffer()]);
-
-            /** PLAY AUDIO SAMPLE */
-            const src = new AudioBufferSourceNode(audioCtx, { buffer: await audioCtx.decodeAudioData(buf) });
-
-            src.connect(src.context.destination);
-            src.start();
-
+        if (e.dataTransfer?.types.includes("text/plain")) {
+            const name = e.dataTransfer.getData("text/plain");
             setName(name);
+        }
+
+        if (e.dataTransfer?.files) {
+            // only one file at a time
+            const file = e.dataTransfer?.files.item(0);
+
+            if (file) {
+                /** ADD TO DATABASE - `put` replace (&&) `add` rejects */
+                const db = await dbConnection({ dbName, version });
+
+                const tx = db.transaction("sample", "readwrite");
+                const store = tx.objectStore("sample");
+
+                const sample = { name: file.name.replace(/\.[^/.]+$/, ""), size: file.size, file: file };
+
+                const [name] = await Promise.all([store.put(sample), tx.done]);
+
+                setName(name);
+            }
         }
 
         // dispatch({ type: "uploadsample", payload: file });
