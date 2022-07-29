@@ -251,7 +251,9 @@ function audioSamplerContext({ dbName, version }: { dbName: string, version: num
         return (
             <AudioSamplerDispatchContext.Provider value={dispatch}>
                 <AudioSamplerStateContext.Provider value={state}>
-                    {children}
+                    <section>
+                        {children}
+                    </section>
                 </AudioSamplerStateContext.Provider>
             </AudioSamplerDispatchContext.Provider >
         );
