@@ -10,10 +10,10 @@ export default function AudioSampler({ dbName, version }: AudioSamplerProps) {
     const AudioSamplerContext = audioSamplerContext({ dbName, version });
     return (
         <AudioSamplerContext>
-            <div>
+            <>
                 <SampleLibrary />
                 <DrumPad />
-            </div>
+            </>
         </AudioSamplerContext>
     );
 }
