@@ -100,7 +100,6 @@ function SamplePreview({ name }: { name: string; }) {
     );
 }
 
-
 function useSamplePad(props: { name?: string; }) {
     const { dispatch, state: { dbName, version, audioCtx, library } } = useAudioSamplerContext();
 
