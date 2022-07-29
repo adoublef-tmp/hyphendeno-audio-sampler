@@ -1,4 +1,5 @@
 /** @jsx h */
+/** @jsxFrag Fragment */
 import { createContext, h, Fragment } from "preact";
 import { useContext, useEffect, useReducer, useState } from "preact/hooks";
 import { tw } from "@twind";
@@ -7,9 +8,6 @@ import { openDB, DBSchema } from "idb/with-async-ittr";
 
 export default function AudioSampler({ dbName, version }: AudioSamplerProps) {
     const AudioSamplerContext = audioSamplerContext({ dbName, version });
-
-
-
     return (
         <AudioSamplerContext>
             <div>
@@ -20,12 +18,13 @@ export default function AudioSampler({ dbName, version }: AudioSamplerProps) {
     );
 }
 
-function DrumPad() {
+function DrumPad({ length }: { length?: number; }) {
     const { state: { library } } = useAudioSamplerContext();
+    if (!length) length = 4;
     return (
-        <Fragment>
-            {[0, 0, 0, 0].map((_, i) => <SamplePad key={i} />)};
-        </Fragment>
+        <>
+            {Array.from({ length }).map((_, i) => <SamplePad key={i} />)}
+        </>
     );
 }
 
@@ -61,10 +60,10 @@ function SampleLibrary() {
     const { library } = useSampleLibrary();
 
     return (
-        <div>
+        <>
             <h1>Sample Library</h1>
             {[...library].map(([name,]) => <SamplePreview key={name} name={name} />)}
-        </div>
+        </>
     );
 }
 
@@ -80,7 +79,7 @@ function SamplePreview({ name }: { name: string; }) {
 }
 
 
-function useSamplePad(props?: { name?: string; }) {
+function useSamplePad(props: { name?: string; }) {
     const { dispatch, state: { dbName, version, audioCtx, library } } = useAudioSamplerContext();
 
     const [name, setName] = useState(props?.name ?? "audio");
@@ -139,7 +138,7 @@ function useSamplePad(props?: { name?: string; }) {
     return { playSample, uploadSample, sampleName: name };
 }
 
-function SamplePad(props?: { name?: string; }) {
+function SamplePad(props: { name?: string; }) {
     const { playSample, uploadSample, sampleName } = useSamplePad(props);
 
     return (
