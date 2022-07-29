@@ -1,11 +1,5 @@
-# fresh project
+# Audio Sampler
 
-### Usage
+## Useful links
 
-Start the project:
-
-```
-deno task start
-```
-
-This will watch the project directory and restart as necessary.
+- [GridSound drawSvg implentation](https://github.com/gridsound/gs-ui-components/blob/master/gsuiWaveform/gsuiWaveform.js)
