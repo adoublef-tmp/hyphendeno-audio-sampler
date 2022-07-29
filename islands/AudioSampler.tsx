@@ -1,5 +1,6 @@
 /** @jsx h */
 /** @jsxFrag Fragment */
+
 import { createContext, h, Fragment } from "preact";
 import { useContext, useEffect, useReducer, useState } from "preact/hooks";
 import { tw } from "@twind";
@@ -12,21 +13,25 @@ export default function AudioSampler({ dbName, version }: AudioSamplerProps) {
         <AudioSamplerContext>
             <>
                 <SampleLibrary />
-                <DrumPad />
+                <SamplePadList length={2} />
             </>
         </AudioSamplerContext>
     );
 }
 
-function DrumPad({ length }: { length?: number; }) {
-    const { state: { library } } = useAudioSamplerContext();
-    if (!length) length = 4;
+function SamplePadList({ length }: { length?: number; }) {
     return (
-        <>
-            {Array.from({ length }).map((_, i) => <SamplePad key={i} />)}
-        </>
+        <div
+            class={tw`border(2 dotted red-200) w(80)`}
+            // onDrop={uploadSample}
+            onDragOver={(e) => e.preventDefault()}
+        >
+            {Array.from({ length: length ?? 4 }).map((_, i) => <SamplePad key={i} />)}
+        </div>
     );
 }
+
+type Library = Map<string, LibraryEntry>;
 
 type LibraryEntry = {
     name: string;
@@ -53,28 +58,45 @@ function useSampleLibrary() {
         })();
     }, [IS_BROWSER]);
 
-    return { library };
+    const uploadSample = async (e: DragEvent) => {
+        e.preventDefault();
+
+        for (const file of e.dataTransfer?.files ?? []) {
+
+            const db = await dbConnection({ dbName, version });
+
+            const tx = db.transaction("sample", "readwrite");
+            const store = tx.objectStore("sample");
+
+            const sample = { name: file.name.replace(/\.[^/.]+$/, ""), size: file.size, file: file };
+
+            const [name] = await Promise.all([store.put(sample), tx.done]);
+
+            dispatch({ type: "uploadsample", payload: { name } });
+        }
+    };
+
+    return { library, uploadSample };
 }
 
 function SampleLibrary() {
-    const { library } = useSampleLibrary();
+    const { library, uploadSample } = useSampleLibrary();
 
     return (
-        <>
-            <h1>Sample Library</h1>
+        <div
+            class={tw`border(2 dotted blue-200) w(80)`}
+            onPointerDown={_ => console.log("drop box")}
+            onDrop={uploadSample}
+            onDragOver={(e) => e.preventDefault()}
+        >
             {[...library].map(([name,]) => <SamplePreview key={name} name={name} />)}
-        </>
+        </div>
     );
 }
 
 function SamplePreview({ name }: { name: string; }) {
-    function selectSample(e: DragEvent) {
-        console.log(`Selected sample: ${name}`);
-        e.dataTransfer?.setData("text/plain", name);
-    }
-
     return (
-        <div onDragStart={selectSample} draggable class={tw`border(2 red solid) w-20`}>{name}</div>
+        <div onDragStart={e => e.dataTransfer?.setData("text/plain", name)} draggable class={tw`border(2 red solid) w-20`}>{name}</div>
     );
 }
 
@@ -103,17 +125,15 @@ function useSamplePad(props: { name?: string; }) {
         }
     };
 
-    async function uploadSample(e: DragEvent) {
+    const uploadSample = async (e: DragEvent) => {
         e.preventDefault();
 
-        if (e.dataTransfer?.types.includes("text/plain")) {
-            const name = e.dataTransfer.getData("text/plain");
-            setName(name);
-        }
+        if (e.dataTransfer?.types.includes("text/plain"))
+            setName(e.dataTransfer.getData("text/plain"));
 
         if (e.dataTransfer?.files) {
             // only one file at a time
-            const file = e.dataTransfer?.files.item(0);
+            const file = e.dataTransfer.files.item(0);
 
             if (file) {
                 /** ADD TO DATABASE - `put` replace (&&) `add` rejects */
@@ -131,9 +151,7 @@ function useSamplePad(props: { name?: string; }) {
                 dispatch({ type: "uploadsample", payload: { name } });
             }
         }
-
-        console.log("huh,", library);
-    }
+    };
 
     return { playSample, uploadSample, sampleName: name };
 }
@@ -201,7 +219,7 @@ type AudioSamplerDispatch = (action: AudioSamplerAction) => void;
 type AudioSamplerState = {
     dbName: string;
     version: number;
-    library: Map<string, LibraryEntry>;
+    library: Library;
     audioCtx?: AudioContext;
 };
 
@@ -218,7 +236,7 @@ function useAudioSamplerContext() {
     return { dispatch, state };
 }
 
-function audioSamplerContext({ dbName, version }: { dbName: string, version: number; }) {
+function audioSamplerContext({ dbName, version }: AudioSamplerProps) {
     /** 
      * FIXME - when `useReducer` is inside the the HOF I get the following error: 
      * main.js:1 Uncaught (in promise) DOMException: 
@@ -226,7 +244,7 @@ function audioSamplerContext({ dbName, version }: { dbName: string, version: num
      * The node before which the new node is to be inserted is not a child of this node.
      */
 
-    return function ({ children }: { children: h.JSX.Element; }) {
+    return ({ children }: { children: h.JSX.Element; }) => {
         const [state, dispatch] = useReducer<AudioSamplerState, AudioSamplerAction>((state, action) => {
             switch (action.type) {
                 case "audiocontext":
@@ -251,9 +269,7 @@ function audioSamplerContext({ dbName, version }: { dbName: string, version: num
         return (
             <AudioSamplerDispatchContext.Provider value={dispatch}>
                 <AudioSamplerStateContext.Provider value={state}>
-                    <section>
-                        {children}
-                    </section>
+                    <section>{children}</section>
                 </AudioSamplerStateContext.Provider>
             </AudioSamplerDispatchContext.Provider >
         );
