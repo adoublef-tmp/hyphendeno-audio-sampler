@@ -1,7 +1,6 @@
 /** @jsx h */
 import { h } from "preact";
-import { tw } from "@twind";
-import AudioSampler from "../islands/AudioSampler.tsx";
+import AudioSampler from "@islands/AudioSampler.tsx";
 
 export default function Home() {
     return (
